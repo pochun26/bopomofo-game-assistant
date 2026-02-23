@@ -289,6 +289,18 @@ export default function App() {
     });
   };
 
+  const goToQuestion = (newIndex: number) => {
+    // Reset the new question's card states before switching
+    setQuestions(prev => {
+      const next = [...prev];
+      const q = { ...next[newIndex] };
+      q.parts = q.parts.map(p => ({ ...p, isFlipped: false }));
+      next[newIndex] = q;
+      return next;
+    });
+    setCurrentQuestionIndex(newIndex);
+  };
+
   // Scoring functions
   const updateScore = (questionId: string, groupId: number, delta: number) => {
     setScores(prev => {
@@ -538,7 +550,7 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <button 
                     disabled={currentQuestionIndex === 0}
-                    onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
+                    onClick={() => goToQuestion(currentQuestionIndex - 1)}
                     className="p-3 rounded-2xl hover:bg-white disabled:opacity-20 transition-all"
                   >
                     <ChevronLeft size={24} />
@@ -548,7 +560,7 @@ export default function App() {
                   </span>
                   <button 
                     disabled={currentQuestionIndex === questions.length - 1}
-                    onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
+                    onClick={() => goToQuestion(currentQuestionIndex + 1)}
                     className="p-3 rounded-2xl hover:bg-white disabled:opacity-20 transition-all flex items-center gap-2 font-medium"
                   >
                     <ChevronRight size={24} />
@@ -570,9 +582,10 @@ export default function App() {
               {/* Cards Display */}
               <div className="flex flex-wrap justify-center gap-6 md:gap-10 py-12">
                 {currentQuestion?.parts.map((part, idx) => (
-                  <div key={idx} className="perspective-1000">
+                  <div key={`${currentQuestionIndex}-${idx}`} className="perspective-1000">
                     <motion.div
                       onClick={() => toggleFlip(idx)}
+                      initial={false}
                       animate={{ rotateY: part.isFlipped ? 180 : 0 }}
                       transition={{ type: 'spring', stiffness: 260, damping: 20 }}
                       className="relative w-32 h-48 md:w-48 md:h-72 cursor-pointer preserve-3d"
