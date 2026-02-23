@@ -13,6 +13,8 @@ import {
   RotateCcw, 
   ChevronRight, 
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
   LayoutGrid,
   Info,
   FileText,
@@ -29,6 +31,8 @@ interface Question {
   id: string;
   parts: QuestionPart[];
 }
+
+const TOTAL_GROUPS = 8;
 
 export default function App() {
   const [mode, setMode] = useState<'host' | 'game'>('host');
@@ -52,6 +56,10 @@ export default function App() {
     }
   ]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  
+  // Scoring State
+  // scores[questionId][groupId] = score for that group on that question
+  const [scores, setScores] = useState<Record<string, Record<number, number>>>({});
   
   // Host State
   const [newPhonetic, setNewPhonetic] = useState('');
@@ -187,6 +195,37 @@ export default function App() {
       return next;
     });
   };
+
+  // Scoring functions
+  const updateScore = (questionId: string, groupId: number, delta: number) => {
+    setScores(prev => {
+      const questionScores = prev[questionId] || {};
+      const currentScore = questionScores[groupId] || 0;
+      const newScore = Math.max(0, currentScore + delta); // Ensure score doesn't go below 0
+      
+      return {
+        ...prev,
+        [questionId]: {
+          ...questionScores,
+          [groupId]: newScore
+        }
+      };
+    });
+  };
+
+  // Calculate total scores for each group
+  const totalScores = useMemo(() => {
+    const totals = Array(TOTAL_GROUPS).fill(0);
+    Object.values(scores).forEach(questionScores => {
+      Object.entries(questionScores).forEach(([groupId, score]) => {
+        const groupIndex = parseInt(groupId);
+        if (groupIndex >= 0 && groupIndex < TOTAL_GROUPS) {
+          totals[groupIndex] += score;
+        }
+      });
+    });
+    return totals;
+  }, [scores]);
 
   const currentQuestion = questions[currentQuestionIndex];
 
@@ -380,6 +419,19 @@ export default function App() {
               exit={{ opacity: 0, scale: 1.05 }}
               className="flex flex-col items-center space-y-12"
             >
+              {/* Total Scores Display */}
+              <div className="w-full bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-sm border border-[#141414]/5">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-[#5A5A40] mb-4 text-center">總分</h3>
+                <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+                  {totalScores.map((score, index) => (
+                    <div key={index} className="flex flex-col items-center">
+                      <div className="text-xs font-medium text-[#141414]/50 mb-1">第{index + 1}組</div>
+                      <div className="text-2xl font-bold text-[#141414]">{score}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Game Controls */}
               <div className="w-full flex items-center justify-between bg-white/50 p-4 rounded-3xl backdrop-blur-sm">
                 <div className="flex items-center gap-4">
@@ -439,6 +491,43 @@ export default function App() {
                     </motion.div>
                   </div>
                 ))}
+              </div>
+
+              {/* Scoring Controls */}
+              <div className="w-full bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-sm border border-[#141414]/5">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-[#5A5A40] mb-4 text-center">本題計分</h3>
+                <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+                  {Array.from({ length: TOTAL_GROUPS }).map((_, groupId) => {
+                    const questionId = currentQuestion?.id || '';
+                    const currentScore = scores[questionId]?.[groupId] || 0;
+                    
+                    return (
+                      <div key={groupId} className="flex flex-col items-center gap-2">
+                        <div className="text-xs font-medium text-[#141414]/50">第{groupId + 1}組</div>
+                        <div className="flex flex-col items-center gap-1">
+                          <button
+                            onClick={() => updateScore(questionId, groupId, 1)}
+                            className="p-2 bg-[#141414] text-white rounded-xl hover:bg-black transition-all active:scale-95 shadow-md"
+                            aria-label={`第${groupId + 1}組加1分`}
+                          >
+                            <ChevronUp size={20} />
+                          </button>
+                          <div className="text-xl font-bold text-[#141414] min-w-[2rem] text-center py-1">
+                            {currentScore}
+                          </div>
+                          <button
+                            onClick={() => updateScore(questionId, groupId, -1)}
+                            disabled={currentScore === 0}
+                            className="p-2 bg-[#5A5A40] text-white rounded-xl hover:bg-[#4A4A30] transition-all active:scale-95 shadow-md disabled:opacity-30 disabled:cursor-not-allowed"
+                            aria-label={`第${groupId + 1}組減1分`}
+                          >
+                            <ChevronDown size={20} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Instructions */}
