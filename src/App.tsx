@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -30,6 +30,7 @@ interface QuestionPart {
 interface Question {
   id: string;
   parts: QuestionPart[];
+  imageUrl?: string;
 }
 
 const TOTAL_GROUPS = 8;
@@ -38,6 +39,10 @@ const STORAGE_KEYS = {
   QUESTIONS: 'bopomofo-game-questions',
   SCORES: 'bopomofo-game-scores'
 };
+
+const BACKGROUND_IMAGE = '/media_resources/工作區域 1.png';
+const CARD_DECORATION_IMAGE = '/media_resources/工作區域 9.png';
+const DECORATION_IMAGE_1 = '/media_resources/工作區域 8.png';
 
 const DEFAULT_QUESTIONS: Question[] = [
   {
@@ -90,6 +95,9 @@ export default function App() {
   );
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
+  const slideDirectionRef = useRef<'left' | 'right'>('right');
+  const isInitialMount = useRef(true);
   
   // Scoring State - Initialize from localStorage
   // scores[questionId][groupId] = score for that group on that question
@@ -106,6 +114,12 @@ export default function App() {
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.SCORES, scores);
   }, [scores]);
+
+  // Preload card decoration image to prevent layout shift during flip
+  useEffect(() => {
+    const img = new Image();
+    img.src = CARD_DECORATION_IMAGE;
+  }, []);
 
   // Clear all data function
   const clearAllData = () => {
@@ -260,6 +274,9 @@ export default function App() {
     }
     setMode('game');
     setCurrentQuestionIndex(0);
+    slideDirectionRef.current = 'right';
+    setSlideDirection('right');
+    isInitialMount.current = true;
     // Reset all flips when starting
     setQuestions(prev => prev.map(q => ({
       ...q,
@@ -290,6 +307,12 @@ export default function App() {
   };
 
   const goToQuestion = (newIndex: number) => {
+    const direction = newIndex > currentQuestionIndex ? 'right' : 'left';
+    slideDirectionRef.current = direction;
+    setSlideDirection(direction);
+    
+    isInitialMount.current = false;
+    
     // Reset the new question's card states before switching
     setQuestions(prev => {
       const next = [...prev];
@@ -335,15 +358,45 @@ export default function App() {
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
-    <div className="min-h-screen bg-[#F5F5F0] text-[#141414] font-sans selection:bg-[#5A5A40] selection:text-white">
-      {/* Header */}
+    <div 
+      className="min-h-screen text-[#141414] font-sans selection:bg-[#5A5A40] selection:text-white relative"
+    >
+      {/* Background image */}
+      <div 
+        className="fixed inset-0 z-0"
+        style={{
+          backgroundImage: `url("${BACKGROUND_IMAGE}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed'
+        }}
+      />
+      
+      {/* Background overlay for better readability */}
+      <div className="fixed inset-0 bg-[#F5F5F0]/70 backdrop-blur-[1px] pointer-events-none z-[1]" />
+      
+      {/* Decorative images */}
+      <div className="fixed inset-0 pointer-events-none z-[2] overflow-hidden">
+        <img 
+          src={DECORATION_IMAGE_1} 
+          alt="装饰" 
+          className="absolute top-1/4 left-1/8 opacity-10"
+          style={{ 
+            transform: 'scale(1)',
+          }}
+        />
+      </div>
+      
+      <div className="relative z-[10]">
+        {/* Header */}
       <header className="border-b border-[#141414]/10 bg-white/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-[#141414] rounded-lg flex items-center justify-center text-white font-bold">
               注
             </div>
-            <h1 className="text-xl font-semibold tracking-tight">注音猜謎助手</h1>
+            <h1 className="text-xl font-semibold tracking-tight">注音猜謎</h1>
           </div>
           
           <div className="flex items-center gap-2">
@@ -580,32 +633,194 @@ export default function App() {
               </div>
 
               {/* Cards Display */}
-              <div className="flex flex-wrap justify-center gap-6 md:gap-10 py-12">
-                {currentQuestion?.parts.map((part, idx) => (
-                  <div key={`${currentQuestionIndex}-${idx}`} className="perspective-1000">
+              <div className="flex flex-wrap justify-center gap-6 md:gap-10 py-12 relative overflow-hidden">
+                <AnimatePresence mode="wait">
+                  {currentQuestion && (
                     <motion.div
-                      onClick={() => toggleFlip(idx)}
-                      initial={false}
-                      animate={{ rotateY: part.isFlipped ? 180 : 0 }}
-                      transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-                      className="relative w-32 h-48 md:w-48 md:h-72 cursor-pointer preserve-3d"
+                      key={currentQuestion.id}
+                      initial={() => {
+                        // Skip animation on initial mount
+                        if (isInitialMount.current) {
+                          return { x: 0, opacity: 1, scale: 1 };
+                        }
+                        const dir = slideDirectionRef.current;
+                        return {
+                          x: dir === 'right' ? '100%' : '-100%',
+                          opacity: 0,
+                          scale: 0.9
+                        };
+                      }}
+                      animate={{
+                        x: 0,
+                        opacity: 1,
+                        scale: 1
+                      }}
+                      exit={() => {
+                        // Use ref to get the current direction immediately
+                        const dir = slideDirectionRef.current;
+                        return {
+                          x: dir === 'right' ? '-100%' : '100%',
+                          opacity: 0,
+                          scale: 0.9
+                        };
+                      }}
+                      transition={{
+                        x: {
+                          type: 'spring',
+                          stiffness: 400,
+                          damping: 35,
+                          mass: 0.8
+                        },
+                        opacity: {
+                          duration: 0.25,
+                          ease: [0.4, 0, 0.2, 1]
+                        },
+                        scale: {
+                          type: 'spring',
+                          stiffness: 300,
+                          damping: 25,
+                          mass: 0.6
+                        }
+                      }}
+                      className="flex flex-wrap justify-center gap-6 md:gap-10 w-full"
+                      onAnimationComplete={() => {
+                        isInitialMount.current = false;
+                      }}
                     >
-                      {/* Front (Phonetic) */}
-                      <div className="absolute inset-0 backface-hidden bg-white rounded-[2rem] shadow-xl border-4 border-[#141414] flex flex-col items-center justify-center p-6">
-                        <span className="text-6xl md:text-8xl font-black text-[#141414]">{part.phonetic}</span>
-                        <div className="mt-4 w-8 h-1 bg-[#141414]/10 rounded-full" />
-                      </div>
+                      {currentQuestion.parts.map((part, idx) => {
+                        return (
+                          <div key={`${currentQuestionIndex}-${idx}`} className="perspective-1000">
+                            <motion.div
+                              onClick={() => toggleFlip(idx)}
+                              initial={{ rotateY: 0, y: 0, scale: 1, rotateX: 0 }}
+                              animate={part.isFlipped ? {
+                                rotateY: 180,
+                                y: [0, -25, 15, -2, 1.5, -0.8, 0.4, -0.2, 0],
+                                scale: [1, 1.06, 0.96, 1.02, 0.99, 1.005, 0.998, 1.002, 1],
+                                rotateX: [0, 3, -1.5, 0.8, -0.4, 0.2, -0.15, 0.05, 0],
+                              } : {
+                                rotateY: 0,
+                                y: 0,
+                                scale: 1,
+                                rotateX: 0,
+                              }}
+                              transition={part.isFlipped ? {
+                                rotateY: {
+                                  type: 'spring',
+                                  stiffness: 380,
+                                  damping: 28,
+                                  mass: 0.5
+                                },
+                                y: {
+                                  duration: 0.65,
+                                  times: [0, 0.25, 0.55, 0.7, 0.8, 0.87, 0.93, 0.97, 1],
+                                  ease: [0.4, 0, 0.2, 1]
+                                },
+                                scale: {
+                                  duration: 0.65,
+                                  times: [0, 0.25, 0.55, 0.7, 0.8, 0.87, 0.93, 0.97, 1],
+                                  ease: [0.4, 0, 0.2, 1]
+                                },
+                                rotateX: {
+                                  duration: 0.65,
+                                  times: [0, 0.25, 0.55, 0.7, 0.8, 0.87, 0.93, 0.97, 1],
+                                  ease: [0.4, 0, 0.2, 1]
+                                }
+                              } : {
+                                rotateY: {
+                                  type: 'spring',
+                                  stiffness: 280,
+                                  damping: 22,
+                                  mass: 0.7
+                                },
+                                y: {
+                                  type: 'spring',
+                                  stiffness: 400,
+                                  damping: 30,
+                                  duration: 0.3
+                                },
+                                scale: {
+                                  type: 'spring',
+                                  stiffness: 450,
+                                  damping: 32,
+                                  duration: 0.3
+                                },
+                                rotateX: {
+                                  type: 'spring',
+                                  stiffness: 400,
+                                  damping: 30,
+                                  duration: 0.3
+                                }
+                              }}
+                              className="relative w-32 h-48 md:w-48 md:h-72 cursor-pointer preserve-3d"
+                              style={{ transformStyle: 'preserve-3d' }}
+                            >
+                              {/* Air compression effect - expands when card lands */}
+                              <AnimatePresence>
+                                {part.isFlipped && (
+                                  <motion.div
+                                    key={`air-${currentQuestionIndex}-${idx}`}
+                                    initial={{ opacity: 0, scale: 0.4, y: 25 }}
+                                    animate={{
+                                      opacity: [0, 0, 0, 0.7, 0.5, 0.2, 0],
+                                      scale: [0.4, 0.4, 0.4, 1.4, 1.9, 2.2, 2.4],
+                                      y: [25, 25, 25, 12, 6, 2, 0],
+                                    }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{
+                                      duration: 0.65,
+                                      times: [0, 0.45, 0.55, 0.6, 0.7, 0.85, 1],
+                                      ease: [0.25, 0.1, 0.25, 1]
+                                    }}
+                                    className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 via-black/30 to-transparent rounded-full -z-10 blur-2xl"
+                                    style={{ transform: 'translateY(100%)' }}
+                                  />
+                                )}
+                              </AnimatePresence>
+                              
+                              {/* Front (Phonetic) */}
+                              <motion.div 
+                                className="absolute inset-0 backface-hidden rounded-[2rem] shadow-xl border-4 border-[#141414] flex flex-col items-center justify-center p-6 overflow-hidden"
+                                style={{
+                                  backgroundImage: `url("${CARD_DECORATION_IMAGE}")`,
+                                  backgroundSize: '60%',
+                                  backgroundPosition: 'center',
+                                  backgroundRepeat: 'no-repeat',
+                                  backgroundColor: '#ffffff',
+                                }}
+                                animate={{ rotateY: 0 }}
+                                transition={{ duration: 0 }}
+                              >
+                                <div className="absolute inset-0 bg-white/90" />
+                                <span className="text-6xl md:text-8xl font-black text-[#141414] relative z-10">{part.phonetic}</span>
+                                <div className="mt-4 w-8 h-1 bg-[#141414]/10 rounded-full relative z-10" />
+                              </motion.div>
 
-                      {/* Back (Character) */}
-                      <div 
-                        className="absolute inset-0 backface-hidden bg-[#5A5A40] rounded-[2rem] shadow-xl border-4 border-[#141414] flex items-center justify-center p-6"
-                        style={{ transform: 'rotateY(180deg)' }}
-                      >
-                        <span className="text-6xl md:text-8xl font-black text-white">{part.char}</span>
-                      </div>
+                              {/* Back (Character) */}
+                              <motion.div 
+                                className="absolute inset-0 backface-hidden bg-[#5A5A40] rounded-[2rem] shadow-xl border-4 border-[#141414] flex flex-col items-center justify-center p-6 overflow-hidden"
+                                animate={{ rotateY: 180 }}
+                                transition={{ duration: 0 }}
+                              >
+                                {idx === 0 && currentQuestion.imageUrl && (
+                                  <img 
+                                    src={currentQuestion.imageUrl} 
+                                    alt={part.char}
+                                    className="absolute inset-0 w-full h-full object-cover opacity-30 rounded-[2rem]"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                )}
+                                <span className="text-6xl md:text-8xl font-black text-white relative z-10">{part.char}</span>
+                              </motion.div>
+                            </motion.div>
+                          </div>
+                        );
+                      })}
                     </motion.div>
-                  </div>
-                ))}
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Scoring Controls */}
@@ -645,11 +860,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Instructions */}
-              <div className="flex items-center gap-2 text-[#141414]/40 bg-white/30 px-6 py-3 rounded-full">
-                <Info size={16} />
-                <p className="text-sm font-medium">點擊卡片翻開提示內容</p>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -660,6 +870,7 @@ export default function App() {
         .preserve-3d { transform-style: preserve-3d; }
         .backface-hidden { backface-visibility: hidden; }
       `}} />
+      </div>
     </div>
   );
 }
