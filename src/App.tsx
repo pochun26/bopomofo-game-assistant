@@ -20,6 +20,9 @@ import {
   FileText,
   X
 } from 'lucide-react';
+import backgroundImage from './assets/工作區域 1.png';
+import cardDecorationImage from './assets/工作區域 9.png';
+import decorationImage1 from './assets/工作區域 8.png';
 
 interface QuestionPart {
   phonetic: string;
@@ -40,9 +43,9 @@ const STORAGE_KEYS = {
   SCORES: 'bopomofo-game-scores'
 };
 
-const BACKGROUND_IMAGE = '/media_resources/工作區域 1.png';
-const CARD_DECORATION_IMAGE = '/media_resources/工作區域 9.png';
-const DECORATION_IMAGE_1 = '/media_resources/工作區域 8.png';
+const BACKGROUND_IMAGE = backgroundImage;
+const CARD_DECORATION_IMAGE = cardDecorationImage;
+const DECORATION_IMAGE_1 = decorationImage1;
 
 const DEFAULT_QUESTIONS: Question[] = [
   {
